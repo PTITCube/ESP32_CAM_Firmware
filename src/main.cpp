@@ -43,7 +43,7 @@ static void sendCaptureError(const char* message) {
 // Ngắt hoàn toàn cảm biến Camera OV2640 và tắt xung dao động XCLK
 void stopCamera() {
     if (isCameraRunning) {
-        Serial.println("[CAM] Deinit camera & ngat xung XCLK...");
+        Serial.println("CAM: Deinit camera & ngat xung XCLK...");
         esp_camera_deinit();
         isCameraRunning = false;
     }
@@ -55,7 +55,7 @@ void stopCamera() {
     // Kéo chân XCLK (GPIO 0) về mức LOW để dập tắt xung dao động cao tần
     pinMode(XCLK_GPIO_NUM, INPUT_PULLDOWN);
 
-    Serial.println("[CAM] Camera da vao che do SLEEP / POWER-DOWN (Zero EMI -> GPS hoat dong tot).");
+    Serial.println("CAM: Camera da vao che do SLEEP / POWER-DOWN (Zero EMI -> GPS hoat dong tot).");
 }
 
 // Khởi tạo và đánh thức camera khi có yêu cầu chụp ảnh
@@ -64,7 +64,7 @@ bool startCamera() {
         return true;
     }
 
-    Serial.println("[CAM] Dang danh thuc va khoi tao cam bien OV2640...");
+    Serial.println("CAM: Dang danh thuc va khoi tao cam bien OV2640...");
 
     camera_config_t config = {};
     config.ledc_channel = LEDC_CHANNEL_0;
@@ -93,12 +93,12 @@ bool startCamera() {
 
     esp_err_t err = esp_camera_init(&config);
     if (err != ESP_OK) {
-        Serial.printf("[ERROR] Camera init that bai: 0x%x\n", err);
+        Serial.printf("ERROR: Camera init that bai: 0x%x\n", err);
         return false;
     }
 
     isCameraRunning = true;
-    Serial.println("[CAM] Camera khoi tao thanh cong. Dang on dinh AGC/AEC...");
+    Serial.println("CAM: Camera khoi tao thanh cong. Dang on dinh AGC/AEC...");
 
     // Cảm biến CMOS cần 1 frame nháp để tự cân bằng phơi sáng/trắng sau khi thức dậy
     delay(60);
@@ -116,16 +116,16 @@ bool startCamera() {
 
 // Hàm debug test camera độc lập qua Serial0 (Serial Monitor trên máy tính)
 void testCaptureViaSerial0() {
-    Serial.println("[CAM] Khoi dong che do Test...");
+    Serial.println("CAM: Khoi dong che do Test...");
     
     if (!startCamera()) {
-        Serial.println("[DEBUG ERROR] Khong the khoi tao camera!");
+        Serial.println("DEBUG ERROR: Khong the khoi tao camera!");
         stopCamera();
         
         return;
     }
 
-    Serial.println("[DEBUG] Dang chup anh test tu cam bien OV2640...");
+    Serial.println("DEBUG: Dang chup anh test tu cam bien OV2640...");
     unsigned long tStart = millis();
     digitalWrite(FLASH_LED_GPIO, HIGH);
     camera_fb_t* fb = esp_camera_fb_get();
@@ -133,13 +133,13 @@ void testCaptureViaSerial0() {
     unsigned long tDuration = millis() - tStart;
 
     if (!fb) {
-        Serial.println("[DEBUG ERROR] Khong the chup anh! (fb_get tra ve NULL)");
+        Serial.println("DEBUG ERROR: Khong the chup anh! (fb_get tra ve NULL)");
         stopCamera();
         Serial.println("===================================================\n");
         return;
     }
 
-    Serial.printf("[DEBUG SUCCESS] Chup anh test thanh cong!\n");
+    Serial.printf("DEBUG SUCCESS: Chup anh test thanh cong!\n");
     Serial.printf("  - Kich thuoc anh : %u bytes (%.2f KB)\n", fb->len, fb->len / 1024.0);
     Serial.printf("  - Do phan giai   : %u x %u\n", fb->width, fb->height);
     Serial.printf("  - Dinh dang      : %s\n", (fb->format == PIXFORMAT_JPEG) ? "JPEG" : "RAW/OTHER");
@@ -148,13 +148,13 @@ void testCaptureViaSerial0() {
     if (fb->len >= 4 && fb->buf[0] == 0xFF && fb->buf[1] == 0xD8) {
         Serial.println("  - Header JPEG    : Hop le (0xFF 0xD8 - Start of Image)");
     } else {
-        Serial.println("  - Header JPEG    : [CANH BAO] Khong dung header JPEG!");
+        Serial.println("  - Header JPEG    : CANH BAO: Khong dung header JPEG!");
     }
 
     if (fb->len >= 2 && fb->buf[fb->len - 2] == 0xFF && fb->buf[fb->len - 1] == 0xD9) {
         Serial.println("  - Footer JPEG    : Hop le (0xFF 0xD9 - End of Image)");
     } else {
-        Serial.println("  - Footer JPEG    : [CANH BAO] Thieu footer JPEG!");
+        Serial.println("  - Footer JPEG    : CANH BAO: Thieu footer JPEG!");
     }
 
     esp_camera_fb_return(fb);
@@ -166,7 +166,7 @@ void testCaptureViaSerial0() {
 
 // Xử lý lệnh chụp và gửi ảnh sang OBC qua UART2
 void handleOBCCommand() {
-    Serial.println("[CAM] Nhan lenh 'p' tu OBC qua UART2. Bat dau danh thuc camera...");
+    Serial.println("CAM: Nhan lenh 'p' tu OBC qua UART2. Bat dau danh thuc camera...");
 
     if (!startCamera()) {
         sendCaptureError("INIT_FAIL");
@@ -177,14 +177,14 @@ void handleOBCCommand() {
     camera_fb_t* frame = esp_camera_fb_get();
     if (frame == nullptr) {
         sendCaptureError("FRAME_NULL");
-        Serial.println("[CAM] Loi: Khong chup duoc anh!");
+        Serial.println("CAM: Loi: Khong chup duoc anh!");
         stopCamera();
         return;
     }
 
     digitalWrite(FLASH_LED_GPIO, HIGH);
     Serial2.printf("SIZE:%u\n", frame->len);
-    Serial.printf("[CAM] Kich thuoc anh gui OBC: %u bytes\n", frame->len);
+    Serial.printf("CAM: Kich thuoc anh gui OBC: %u bytes\n", frame->len);
 
     // Chờ OBC xác nhận sẵn sàng nhận dữ liệu
     unsigned long startTime = millis();
@@ -203,7 +203,7 @@ void handleOBCCommand() {
 
     if (!ready) {
         sendCaptureError("ACK_TIMEOUT");
-        Serial.println("[CAM] Loi: OBC khong phan hoi ACK!");
+        Serial.println("CAM: Loi: OBC khong phan hoi ACK!");
         digitalWrite(FLASH_LED_GPIO, LOW);
         esp_camera_fb_return(frame);
         stopCamera();
@@ -211,7 +211,7 @@ void handleOBCCommand() {
     }
 
     // Gửi dữ liệu ảnh raw qua UART2 đến OBC
-    Serial.println("[CAM] Dang truyen du lieu anh qua UART2...");
+    Serial.println("CAM: Dang truyen du lieu anh qua UART2...");
     Serial2.write(frame->buf, frame->len);
     Serial2.flush();
 
@@ -222,7 +222,7 @@ void handleOBCCommand() {
             String response = Serial2.readStringUntil('\n');
             response.trim();
             if (response == "DONE") {
-                Serial.println("[CAM] OBC xac nhan nhan anh thanh cong!");
+                Serial.println("CAM: OBC xac nhan nhan anh thanh cong!");
                 break;
             }
         }
@@ -290,7 +290,7 @@ void loop() {
             static bool flashState = false;
             flashState = !flashState;
             digitalWrite(FLASH_LED_GPIO, flashState ? HIGH : LOW);
-            Serial.printf("[DEBUG] Flash LED: %s\n", flashState ? "ON" : "OFF");
+            Serial.printf("DEBUG: Flash LED: %s\n", flashState ? "ON" : "OFF");
         } else if (debugCmd == 's' || debugCmd == 'S') {
             Serial.println("\n--- [SYSTEM & EMI STATUS] ---");
             Serial.printf("  - CPU Frequency : %d MHz\n", getCpuFrequencyMhz());
