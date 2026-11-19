@@ -307,7 +307,7 @@ void loop() {
         String command = Serial2.readStringUntil('\n');
         command.trim();
 
-        if (command == "p" || command == "P") {
+        if (command == "p" || command == "P" || command.equalsIgnoreCase("capture") || command.equalsIgnoreCase("photo")) {
             handleOBCCommand();
         }
     }
