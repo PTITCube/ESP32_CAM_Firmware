@@ -43,7 +43,6 @@ static void sendCaptureError(const char* message) {
 // Ngắt hoàn toàn cảm biến Camera OV2640 và tắt xung dao động XCLK
 void stopCamera() {
     if (isCameraRunning) {
-        Serial.println("CAM: Deinit camera & ngat xung XCLK...");
         esp_camera_deinit();
         isCameraRunning = false;
     }
@@ -55,7 +54,6 @@ void stopCamera() {
     // Kéo chân XCLK (GPIO 0) về mức LOW để dập tắt xung dao động cao tần
     pinMode(XCLK_GPIO_NUM, INPUT_PULLDOWN);
 
-    Serial.println("CAM: Camera da vao che do SLEEP / POWER-DOWN (Zero EMI -> GPS hoat dong tot).");
 }
 
 // Khởi tạo và đánh thức camera khi có yêu cầu chụp ảnh
@@ -64,7 +62,6 @@ bool startCamera() {
         return true;
     }
 
-    Serial.println("CAM: Dang danh thuc va khoi tao cam bien OV2640...");
 
     camera_config_t config = {};
     config.ledc_channel = LEDC_CHANNEL_0;
@@ -166,7 +163,6 @@ void testCaptureViaSerial0() {
 
 // Xử lý lệnh chụp và gửi ảnh sang OBC qua UART2
 void handleOBCCommand() {
-    Serial.println("CAM: Nhan lenh 'p' tu OBC qua UART2. Bat dau danh thuc camera...");
 
     if (!startCamera()) {
         sendCaptureError("INIT_FAIL");
@@ -211,7 +207,6 @@ void handleOBCCommand() {
     }
 
     // Gửi dữ liệu ảnh raw qua UART2 đến OBC
-    Serial.println("CAM: Dang truyen du lieu anh qua UART2...");
     Serial2.write(frame->buf, frame->len);
     Serial2.flush();
 
@@ -222,7 +217,7 @@ void handleOBCCommand() {
             String response = Serial2.readStringUntil('\n');
             response.trim();
             if (response == "DONE") {
-                Serial.println("CAM: OBC xac nhan nhan anh thanh cong!");
+                Serial.printf("CAM: Sent %u bytes to OBC successfully\n", frame->len);
                 break;
             }
         }
@@ -258,23 +253,6 @@ void setup() {
     Serial2.begin(115200, SERIAL_8N1, OBC_UART_RX, OBC_UART_TX);
 
     
-    Serial.println("  ESP32-CAM ON-DEMAND ZERO-EMI FIRMWARE   ");
-    Serial.println("  (MAX PERFORMANCE: 240MHz / 20MHz XCLK)  ");
-    
-    Serial.printf("CPU Frequency   : %d MHz (Max Performance)\n", getCpuFrequencyMhz());
-    Serial.printf("Camera XCLK     : %d MHz (Max OV2640 Clock - Chi phat xung khi chup)\n", CAMERA_XCLK_FREQ / 1000000);
-    Serial.println("Camera Status   : SLEEP / POWER-DOWN (Zero EMI to GPS)");
-    Serial.println("Wi-Fi / BT      : DISABLED");
-    Serial.println("UART0 (USB/FTDI): Debug & Test Monitor");
-    Serial.println("UART2 (GPIO14/15): Ket noi OBC (ESP32)");
-    
-    Serial.println("Co che hoat dong:");
-    Serial.println("  - Trang thai cho : Camera ngat hoan toan -> GPS bat song tot.");
-    Serial.println("  - Nhan lenh chup : Bat camera xung toi da -> Chup -> Gui -> Ngat camera.");
-    Serial.println("Menu debug tren Serial Monitor (Serial0):");
-    Serial.println("  - Nhap 't' hoac 'p': Test quy trinh chup on-demand");
-    Serial.println("  - Nhap 'f'         : Bat/Tat den Flash LED");
-    Serial.println("  - Nhap 's'         : Xem thong tin xung nhip & trang thai");
     
 
     Serial2.println("CAMERA_READY");
