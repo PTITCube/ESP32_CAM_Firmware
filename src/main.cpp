@@ -21,6 +21,29 @@
 #define PCLK_GPIO_NUM     22
 #define FLASH_LED_GPIO     4
 
+// Cấu hình điều khiển độ sáng Flash LED bằng PWM (LEDC)
+// Mặc định ban đầu bật mức HIGH (100% ~ 255) rất chói, gây sụt áp và quá nhiệt vi mạch.
+// Dùng kênh PWM riêng (Channel 7, Timer 1) để điều chỉnh độ sáng dịu vừa đủ cho camera.
+#define FLASH_LEDC_CHANNEL 7       // Kênh PWM riêng (Camera XCLK dùng LEDC_CHANNEL_0)
+#define FLASH_LEDC_FREQ    5000    // Tần số PWM 5kHz
+#define FLASH_LEDC_RES     8       // Độ phân giải 8-bit (0 - 255)
+#define FLASH_BRIGHTNESS   25      // Mức sáng dịu (~10% công suất: 25/255, bù sáng tốt, không chói, không nóng)
+
+static uint8_t currentFlashBrightness = FLASH_BRIGHTNESS;
+
+void setFlashBrightness(uint8_t duty) {
+    currentFlashBrightness = duty;
+    ledcWrite(FLASH_LEDC_CHANNEL, duty);
+}
+
+void flashOn(uint8_t duty = currentFlashBrightness) {
+    ledcWrite(FLASH_LEDC_CHANNEL, duty);
+}
+
+void flashOff() {
+    ledcWrite(FLASH_LEDC_CHANNEL, 0);
+}
+
 // UART2 trên ESP32-CAM: Giao tiếp với ESP32 chính (OBC)
 // Dùng GPIO 14 (TX) và GPIO 15 (RX) thay vì UART0
 #define OBC_UART_TX   14
@@ -129,9 +152,9 @@ void testCaptureViaSerial0() {
 
     Serial.println("DEBUG: Dang chup anh test tu cam bien OV2640...");
     unsigned long tStart = millis();
-    digitalWrite(FLASH_LED_GPIO, HIGH);
+    flashOn();
     camera_fb_t* fb = esp_camera_fb_get();
-    digitalWrite(FLASH_LED_GPIO, LOW);
+    flashOff();
     unsigned long tDuration = millis() - tStart;
 
     if (!fb) {
@@ -175,10 +198,10 @@ void handleOBCCommand() {
         return;
     }
 
-    // Nháy đèn Flash trong thời gian cảm biến OV2640 phơi sáng và chụp ảnh
-    digitalWrite(FLASH_LED_GPIO, HIGH);
+    // Nháy đèn Flash với độ sáng dịu trong thời gian cảm biến OV2640 phơi sáng và chụp ảnh
+    flashOn();
     camera_fb_t* frame = esp_camera_fb_get();
-    digitalWrite(FLASH_LED_GPIO, LOW);
+    flashOff();
 
     if (frame == nullptr) {
         sendCaptureError("FRAME_NULL");
@@ -249,8 +272,10 @@ void setup() {
     WiFi.mode(WIFI_OFF);
     btStop();
 
-    pinMode(FLASH_LED_GPIO, OUTPUT);
-    digitalWrite(FLASH_LED_GPIO, LOW);
+    // Cấu hình PWM cho Flash LED để điều khiển độ sáng dịu (chống chói, giảm nhiệt)
+    ledcSetup(FLASH_LEDC_CHANNEL, FLASH_LEDC_FREQ, FLASH_LEDC_RES);
+    ledcAttachPin(FLASH_LED_GPIO, FLASH_LEDC_CHANNEL);
+    flashOff();
 
     // 3. Mặc định khởi động: Đưa camera vào trạng thái SLEEP ngay lập tức
     stopCamera();
@@ -262,9 +287,6 @@ void setup() {
     // UART2 (Serial2) kết nối với OBC
     Serial2.begin(115200, SERIAL_8N1, OBC_UART_RX, OBC_UART_TX);
     Serial2.setTimeout(100);
-
-    
-    
 
     Serial2.println("CAMERA_READY");
 }
@@ -278,8 +300,20 @@ void loop() {
         } else if (debugCmd == 'f' || debugCmd == 'F') {
             static bool flashState = false;
             flashState = !flashState;
-            digitalWrite(FLASH_LED_GPIO, flashState ? HIGH : LOW);
-            Serial.printf("DEBUG: Flash LED: %s\n", flashState ? "ON" : "OFF");
+            if (flashState) flashOn();
+            else flashOff();
+            Serial.printf("DEBUG: Flash LED: %s (Brightness: %d/255 ~ %.1f%%)\n",
+                          flashState ? "ON" : "OFF", currentFlashBrightness, (currentFlashBrightness * 100.0f) / 255.0f);
+        } else if (debugCmd == '+' || debugCmd == '=') {
+            if (currentFlashBrightness <= 235) currentFlashBrightness += 20;
+            else currentFlashBrightness = 255;
+            flashOn();
+            Serial.printf("DEBUG: Tang do sang Flash: %d/255\n", currentFlashBrightness);
+        } else if (debugCmd == '-' || debugCmd == '_') {
+            if (currentFlashBrightness >= 25) currentFlashBrightness -= 20;
+            else currentFlashBrightness = 5;
+            flashOn();
+            Serial.printf("DEBUG: Giam do sang Flash: %d/255\n", currentFlashBrightness);
         } else if (debugCmd == 's' || debugCmd == 'S') {
             Serial.println("\n--- [SYSTEM & EMI STATUS] ---");
             Serial.printf("  - CPU Frequency : %d MHz\n", getCpuFrequencyMhz());
