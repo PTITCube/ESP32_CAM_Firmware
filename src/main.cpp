@@ -170,7 +170,11 @@ void handleOBCCommand() {
         return;
     }
 
+    // Nháy đèn Flash trong thời gian cảm biến OV2640 phơi sáng và chụp ảnh
+    digitalWrite(FLASH_LED_GPIO, HIGH);
     camera_fb_t* frame = esp_camera_fb_get();
+    digitalWrite(FLASH_LED_GPIO, LOW);
+
     if (frame == nullptr) {
         sendCaptureError("FRAME_NULL");
         Serial.println("CAM: Loi: Khong chup duoc anh!");
@@ -178,7 +182,6 @@ void handleOBCCommand() {
         return;
     }
 
-    digitalWrite(FLASH_LED_GPIO, HIGH);
     Serial2.printf("SIZE:%u\n", frame->len);
     Serial.printf("CAM: Kich thuoc anh gui OBC: %u bytes\n", frame->len);
 
@@ -200,7 +203,6 @@ void handleOBCCommand() {
     if (!ready) {
         sendCaptureError("ACK_TIMEOUT");
         Serial.println("CAM: Loi: OBC khong phan hoi ACK!");
-        digitalWrite(FLASH_LED_GPIO, LOW);
         esp_camera_fb_return(frame);
         stopCamera();
         return;
@@ -224,7 +226,6 @@ void handleOBCCommand() {
         delay(1);
     }
 
-    digitalWrite(FLASH_LED_GPIO, LOW);
     esp_camera_fb_return(frame);
 
     // Truyền xong -> Tắt camera ngay lập tức để GPS tiếp tục định vị bình thường
@@ -251,6 +252,7 @@ void setup() {
 
     // UART2 (Serial2) kết nối với OBC
     Serial2.begin(115200, SERIAL_8N1, OBC_UART_RX, OBC_UART_TX);
+    Serial2.setTimeout(100);
 
     
     
