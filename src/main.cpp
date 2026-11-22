@@ -45,6 +45,7 @@ void stopCamera() {
     if (isCameraRunning) {
         esp_camera_deinit();
         isCameraRunning = false;
+        delay(20); // Chờ giải phóng tài nguyên DMA và ngắt
     }
 
     // Đưa chân PWDN lên mức HIGH (OV2640 Power-Down active HIGH)
@@ -62,6 +63,10 @@ bool startCamera() {
         return true;
     }
 
+    // Đánh thức cảm biến OV2640 khỏi Power-Down và chờ ổn định nguồn
+    pinMode(PWDN_GPIO_NUM, OUTPUT);
+    digitalWrite(PWDN_GPIO_NUM, LOW);
+    delay(20);
 
     camera_config_t config = {};
     config.ledc_channel = LEDC_CHANNEL_0;
@@ -205,6 +210,7 @@ void handleOBCCommand() {
         Serial.println("CAM: Loi: OBC khong phan hoi ACK!");
         esp_camera_fb_return(frame);
         stopCamera();
+        while (Serial2.available()) Serial2.read();
         return;
     }
 
@@ -212,9 +218,9 @@ void handleOBCCommand() {
     Serial2.write(frame->buf, frame->len);
     Serial2.flush();
 
-    // Chờ OBC xác nhận hoàn tất
+    // Chờ OBC xác nhận hoàn tất (tối đa 1 giây, tránh nghẽn luồng nếu OBC ngắt MUX)
     startTime = millis();
-    while (millis() - startTime < 15000) {
+    while (millis() - startTime < 1000) {
         if (Serial2.available()) {
             String response = Serial2.readStringUntil('\n');
             response.trim();
@@ -230,6 +236,9 @@ void handleOBCCommand() {
 
     // Truyền xong -> Tắt camera ngay lập tức để GPS tiếp tục định vị bình thường
     stopCamera();
+
+    // Dọn sạch đệm Serial2 để sẵn sàng nhận lệnh tiếp theo ngay lập tức
+    while (Serial2.available()) Serial2.read();
 }
 
 void setup() {
